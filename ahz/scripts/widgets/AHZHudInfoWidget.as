@@ -9,7 +9,7 @@ import flash.filters.DropShadowFilter;
 
 class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 {
-	//Widgets
+	//Widgets 
 	public var AHZBottomBar_mc:MovieClip;
 	public var Inventory_mc:MovieClip;
 	public var content:MovieClip;

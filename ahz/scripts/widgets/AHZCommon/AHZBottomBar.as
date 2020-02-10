@@ -9,7 +9,7 @@ class ahz.scripts.widgets.AHZCommon.AHZBottomBar extends MovieClip
 	var iLeftOffset: Number;
 	var playerCardWith: Number;
 	
-	var PLAYER_CARD_WIDTH:Number = 651.0;
+	var PLAYER_CARD_WIDTH:Number = 451.0;
 
 	function AHZBottomBar()
 	{
