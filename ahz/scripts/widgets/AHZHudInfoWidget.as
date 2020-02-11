@@ -49,7 +49,7 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	private var savedCrossHairData:Object;
 	private var displayActive:Boolean;
 	private var showEnemySoulLevel:Boolean;
-	var PLAYER_CARD_WIDTH:Number = 651.0;
+	var PLAYER_CARD_WIDTH:Number = 451.0;
 		
 	// private variables
 	private var savedRolloverInfoText:String;
