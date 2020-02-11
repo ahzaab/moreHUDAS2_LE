@@ -562,12 +562,21 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	{
 		if (showknownEnchantment && isValidTarget)
 		{
-			var knownEnchantment:Boolean=_global.skse.plugins.AHZmoreHUDPlugin.IsAKnownEnchantedItem();
+			var knownEnchantment:Number=_global.skse.plugins.AHZmoreHUDPlugin.IsAKnownEnchantedItem();
 
 			if (knownEnchantment && TopRolloverText._alpha > 0 && TopRolloverText.htmlText!="")
 			{
 				TopRolloverText.html=true;
-				appendImageToEnd(TopRolloverText, "ahzknown.png", 17, 17);
+				
+				// Player knows the enchantment
+				if (knownEnchantment == 1){
+					appendImageToEnd(TopRolloverText, "ahzknown.png", 17, 17);
+				}
+				
+				// The item is enchanted, but the player cannot learn the enchantment
+				if (knownEnchantment == 2){
+					appendImageToEnd(TopRolloverText, "ahzEnch.png", 17, 17);
+				}	
 			}
 		}
 	}
