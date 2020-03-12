@@ -879,7 +879,7 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		if (viewBottomInfo)
 		{
 			var tempType:Number;
-			if (formType == AHZInventoryDefines.kWeapon || formType == AHZInventoryDefines.kAmmo)
+			if (formType == AHZInventoryDefines.kWeapon || formType == AHZInventoryDefines.kAmmo || formType == AHZInventoryDefines.kProjectile)
 			{
 				tempType = AHZInventoryDefines.ICT_WEAPON;
 			}
