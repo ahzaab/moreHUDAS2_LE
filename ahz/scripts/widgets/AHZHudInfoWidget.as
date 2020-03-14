@@ -28,6 +28,7 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	private var viewSideInfo:Boolean;
 	private var viewEffectsInfo:Boolean;
 	private var viewBottomInfo:Boolean;
+	private var viewBottomInfoAlways:Boolean;
 	private var viewInventoryCount:Boolean;
 	private var bottomAligned:Number;
 	private var inventoryAligned:Number;
@@ -132,6 +133,7 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		viewSideInfo = false;
 		viewEffectsInfo = false;
 		viewBottomInfo = false;
+		viewBottomInfoAlways = false;
 		viewInventoryCount = false;
 		bottomAligned = 1;
 		inventoryAligned = 0;
@@ -235,6 +237,11 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 			var hudIsVisible:Boolean = (TopRolloverText._alpha > 0);	
 			ProcessPlayerWidget(validTarget && hudIsVisible, (outData && outData.outObj && outData.outObj.canCarry));
 			ProcessTargetAndInventoryWidget(validTarget && hudIsVisible);
+		}	
+		else if (viewBottomInfo && viewBottomInfoAlways){
+			var outData:Object = {outObj:Object};
+			var validTarget:Boolean = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget(outData);
+			ProcessPlayerWidget(validTarget, (outData && outData.outObj && outData.outObj.canCarry));
 		}
 	}
 
@@ -714,7 +721,7 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 					hideBottomWidget();
 				}
 			}
-			else if (ToggleState > 0)
+			else if (ToggleState > 0 || viewBottomInfoAlways)
 			{
 				// Only show player data
 				_global.skse.plugins.AHZmoreHUDPlugin.GetPlayerData(playerData);
@@ -841,7 +848,8 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 								   showEnemyLevelMinValue:Number,
 								   showknownEnchantmentValue:Number,
 								   widgetDisplayDelayMSValue:Number,
-								   showEnemySoulLevelValue:Number):Void 
+								   showEnemySoulLevelValue:Number,
+								   viewBottomInfoAlwaysValue:Number):Void 
 	{				
 		viewSideInfo = (sideView>=1);
 		viewBottomInfo = (bottomView>=1);
@@ -864,6 +872,7 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		showknownEnchantment = (showknownEnchantmentValue>=1);
 		widgetDisplayDelayMS = widgetDisplayDelayMSValue;
 		showEnemySoulLevel = (showEnemySoulLevelValue>=1);
+		viewBottomInfoAlways = (viewBottomInfoAlwaysValue>=1);
 		RefreshWidgets();
 	}
 
@@ -926,7 +935,13 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	// @Papyrus
 	public function hideBottomWidget():Void
 	{
-		AHZBottomBar_mc._alpha = 0;
+		if (!viewBottomInfoAlways){
+			AHZBottomBar_mc._alpha = 0;
+		}
+		else
+		{
+			
+		}
 	}
 
 	// @Papyrus
