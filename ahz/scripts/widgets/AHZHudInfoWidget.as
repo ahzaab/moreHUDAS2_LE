@@ -1,29 +1,34 @@
-﻿import gfx.io.GameDelegate;
-//import skyui.widgets.WidgetBase;
+﻿import flash.display.BitmapData;
+import gfx.io.GameDelegate;
 import Shared.GlobalFunc;
 import skyui.util.Debug;
 import flash.geom.Transform;
 import flash.geom.ColorTransform;
 import flash.geom.Matrix;
-import flash.display.BitmapData;
+import flash.filters.DropShadowFilter;
 
 class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 {
-	//Widgets
+	//Widgets 
 	public var AHZBottomBar_mc:MovieClip;
-	public var Book_mc:MovieClip;
 	public var Inventory_mc:MovieClip;
 	public var content:MovieClip;
-	public var Weapons_mc:MovieClip;
+	public var WVTranslated:TextField;
+	public var LevelTranslated:TextField;
+	public var txtMeasureInstance:TextField;
+	public var BottomRolloverText:TextField;
+	public var TopRolloverText:TextField;
+	public var EnemySoul:TextField;
 	
 	// Public vars
 	public var ToggleState:Number;
-
+	public var prevEnemyPercent:Number;
 
 	// Options
 	private var viewSideInfo:Boolean;
 	private var viewEffectsInfo:Boolean;
 	private var viewBottomInfo:Boolean;
+	private var viewBottomInfoAlways:Boolean;
 	private var viewInventoryCount:Boolean;
 	private var bottomAligned:Number;
 	private var inventoryAligned:Number;
@@ -36,32 +41,50 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	private var showBookSkill:Boolean;
 	private var activationMode:Number;
 	private var showTargetWeight:Boolean;
-
+	private var showValueToWeight:Boolean;
+	private var showEnemyLevel:Boolean;
+	private var showEnemyLevelMax:Number;
+	private var showEnemyLevelMin:Number;
+	private var showknownEnchantment:Boolean;
+	private var widgetDisplayDelayMS:Number;
+	private var savedCrossHairData:Object;
+	private var displayActive:Boolean;
+	private var showEnemySoulLevel:Boolean;
+	var PLAYER_CARD_WIDTH:Number = 451.0;
+		
 	// private variables
 	private var savedRolloverInfoText:String;
+	private var savedEnemyTextInfo:String;
+	private var savedEnemyHtmlTextInfo:String;
+	private var savedEnemyLevelValue:String;
+	private var savedEnemyLevelNumber:Number;
+	private var savedPlayerLevelNumber:Number
 
 	private var _mcLoader:MovieClipLoader;
 	private var alphaTimer:Number;
-
+	private var widgetDelayTimer:Number;
+	
 	// Rects
 	private var maxXY:Object;
 	private var minXY:Object;
 
+	
 	// Statics
 	private static var hooksInstalled:Boolean = false;
 
 	/* INITIALIZATION */
-
+	
 	public function AHZHudInfoWidget()
 	{
 		super();
-
+		savedCrossHairData = {outObj:Object,validTarget:Boolean};
 		// Get the rec of the parent
 		maxXY = {x:Stage.visibleRect.x,y:Stage.visibleRect.y};
 		minXY = {x:Stage.visibleRect.x + Stage.visibleRect.width,y:Stage.visibleRect.y + Stage.visibleRect.height};
 		this._parent.globalToLocal(maxXY);
 		this._parent.globalToLocal(minXY);
-
+		txtMeasureInstance._alpha = 0;
+		
 		// Anchor this widget to the top left corner
 		this._y = maxXY.y;
 		this._x = maxXY.x;
@@ -71,21 +94,46 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		hideSideWidget();
 		hideBottomWidget();
 		hideInventoryWidget();
-		Book_mc._alpha = 0;
 
+		InitEnemySoulTextField();
+
+		//EnemySoul.border = true;
+
+		if (_root.HUDMovieBaseInstance.RolloverInfoInstance)
+		{
+			BottomRolloverText = _root.HUDMovieBaseInstance.RolloverInfoInstance;
+		}
+		else
+		{
+			// SkyHUD
+			BottomRolloverText = _root.HUDMovieBaseInstance.RolloverInfo_mc.RolloverInfoInstance
+		}
+		
+		if (_root.HUDMovieBaseInstance.RolloverNameInstance)
+		{
+			TopRolloverText = _root.HUDMovieBaseInstance.RolloverNameInstance;
+		}
+		else
+		{
+			// SkyHUD
+			TopRolloverText = _root.HUDMovieBaseInstance.RolloverName_mc.RolloverNameInstance
+		}
+		
 		if (! hooksInstalled)
 		{
 			// Apply hooks to hook events
 			hookFunction(_root.HUDMovieBaseInstance,"SetCrosshairTarget",this,"SetCrosshairTarget");
 			hookFunction(_root.HUDMovieBaseInstance,"ShowElements",this,"ShowElements");
+			hookFunction(_root.HUDMovieBaseInstance,"SetCompassAngle",this,"SetCompassAngle");
 			_global.skse.plugins.AHZmoreHUDPlugin.InstallHooks();
 			hooksInstalled = true;
 		}
-
+			
 		// Initialize variables
 		viewSideInfo = false;
 		viewEffectsInfo = false;
 		viewBottomInfo = false;
+		viewBottomInfoAlways = false;
 		viewInventoryCount = false;
 		bottomAligned = 1;
 		inventoryAligned = 0;
@@ -100,11 +148,31 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		ToggleState = 0;
 		savedRolloverInfoText = "";
 		showTargetWeight = false;
+		showValueToWeight = false;
+		showEnemyLevel = false;
+		showEnemyLevelMax = 10;
+		showEnemyLevelMin = 10;
+		showknownEnchantment = false;
+		widgetDisplayDelayMS = 0;
+		displayActive = false;
+		showEnemySoulLevel = false;
+	}
+
+	function InitEnemySoulTextField():Void{
+		var enemy_mc = _root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance;
+		EnemySoul = enemy_mc.createTextField("EnemySoul", 
+							enemy_mc.getNextHighestDepth(), 
+							 enemy_mc.RolloverNameInstance._x, 
+							 enemy_mc.RolloverNameInstance._height - 22, 
+							 enemy_mc.RolloverNameInstance._width, 
+							 enemy_mc.RolloverNameInstance._height);
+		EnemySoul.setNewTextFormat(enemy_mc.RolloverNameInstance.getTextFormat());
 		
-		
-		Weapons_mc.LeftItem.EquipIcon.gotoAndStop("LeftEquip");
-		Weapons_mc.RightItem.EquipIcon.gotoAndStop("RightEquip");
-		Weapons_mc.PowerItem.EquipIcon.gotoAndStop("Equipped");
+		var filter:DropShadowFilter = new DropShadowFilter(2,45,0,100,2,2,1.5);
+		var filterArray:Array = new Array();
+  		filterArray.push(filter);
+		EnemySoul.filters = filterArray;
+		EnemySoul._alpha = 0;	
 	}
 
 	function ShowElements(aMode:String,abShow:Boolean):Void
@@ -121,7 +189,8 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 			// Leaving book mode
 			if (! abShow)
 			{
-				ProcessReadBook(_global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget());
+				var outData:Object = {outObj:Object};
+				ProcessReadBook(_global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget(outData));
 			}
 		}
 
@@ -146,19 +215,15 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	public function checkForClearedHud():Void
 	{
 		clearInterval(alphaTimer);
-		if (_root.HUDMovieBaseInstance.RolloverText._alpha < 50)
+		if (TopRolloverText._alpha < 50)
 		{
 			hideSideWidget();	
 			hideInventoryWidget();
-			Book_mc._alpha = 0;
+			//Book_mc._alpha = 0;
 			
 			if (ToggleState == 0)
 			{
 				hideBottomWidget();
-			}
-			else
-			{
-				ProcessPlayerWidget(false);
 			}
 		}
 	}
@@ -167,48 +232,92 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	{
 		if (ToggleState > 0)
 		{
-			var validTarget:Boolean = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget();
-			var hudIsVisible:Boolean = (_root.HUDMovieBaseInstance.RolloverText._alpha > 0);	
-			ProcessPlayerWidget(validTarget && hudIsVisible);
-			ProcessTargetWidget(validTarget && hudIsVisible);
-			ProcessInventoryCountWidget(validTarget && hudIsVisible);
+			var outData:Object = {outObj:Object};
+			var validTarget:Boolean = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget(outData);
+			var hudIsVisible:Boolean = (TopRolloverText._alpha > 0);	
+			ProcessPlayerWidget(validTarget && hudIsVisible, (outData && outData.outObj && outData.outObj.canCarry));
+			ProcessTargetAndInventoryWidget(validTarget && hudIsVisible);
+		}	
+		else if (viewBottomInfo && viewBottomInfoAlways){
+			var outData:Object = {outObj:Object};
+			var validTarget:Boolean = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget(outData);
+			ProcessPlayerWidget(validTarget, (outData && outData.outObj && outData.outObj.canCarry));
 		}
 	}
 
 	function TurnOnWidgets():Void
 	{
 		ToggleState = 1;
-		var validTarget:Boolean = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget();
-		var hudIsVisible:Boolean = (_root.HUDMovieBaseInstance.RolloverText._alpha > 0);
-		ProcessPlayerWidget(validTarget && hudIsVisible);
-		ProcessTargetWidget(validTarget && hudIsVisible);
-		ProcessInventoryCountWidget(validTarget && hudIsVisible);
+		var outData:Object = {outObj:Object};
+		var validTarget:Boolean = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget(outData);
+		var hudIsVisible:Boolean = (TopRolloverText._alpha > 0);
+		ProcessPlayerWidget(validTarget && hudIsVisible, (outData && outData.outObj && outData.outObj.canCarry));
+		ProcessTargetAndInventoryWidget(validTarget && hudIsVisible, (outData && outData.outObj && outData.outObj.canCarry));
 	}
 
 	function TurnOffWidgets():Void
 	{
 		ToggleState = 0;
-		ProcessPlayerWidget(false);
-		ProcessTargetWidget(false);
-		ProcessInventoryCountWidget(false);
+		ProcessPlayerWidget(false, false);
+		ProcessTargetAndInventoryWidget(false);
 		hideBottomWidget();
+	}
+
+	function appendHtmlToEnd(htmlText:String, appendedHtml:String):String
+	{
+		var stringIndex:Number;
+		stringIndex = htmlText.lastIndexOf("</P></TEXTFORMAT>");
+		var firstText:String = htmlText.substr(0,stringIndex);
+		var secondText:String = htmlText.substr(stringIndex,htmlText.length - stringIndex);						
+        return firstText + appendedHtml + secondText;
+	}
+
+	function appendImageToEnd(textField:TextField, imageName:String, width:Number, height:Number)
+	{
+		if (textField.text.indexOf("[" + imageName + "]") < 0)
+		{
+			var b1 = BitmapData.loadBitmap(imageName); 
+			if (b1)
+			{
+				var a = new Array; 
+				a[0] = { subString:"[" + imageName + "]", image:b1, width:width, height:height, id:"id" + imageName };  //baseLineY:0, 
+				textField.setImageSubstitutions(a);
+				textField.htmlText = 
+				appendHtmlToEnd(textField.htmlText, " " + "[" + imageName + "]");
+			}
+		}
 	}
 
 	// Hooks the main huds function
 	function SetCrosshairTarget(abActivate:Boolean,aName:String,abShowButton:Boolean,abTextOnly:Boolean,abFavorMode:Boolean,abShowCrosshair:Boolean,aWeight:Number,aCost:Number,aFieldValue:Number,aFieldText):Void
-	{
+	{			
 		var validTarget:Boolean = false;
 		var activateWidgets:Boolean = false;
-		showEquippedWidget(1);
+		var outData:Object = {outObj:Object};
+		
+		// Always reset the delay timer to reset when the cross hair changes
+		if (widgetDelayTimer)
+		{
+			clearInterval(widgetDelayTimer);
+		}			
+		
+		//showEquippedWidget(1);
 		if (abActivate)
 		{
-			validTarget = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget();
+			validTarget = _global.skse.plugins.AHZmoreHUDPlugin.GetIsValidTarget(outData);
+			savedCrossHairData.outObj = outData.outObj;
+			savedCrossHairData.validTarget = validTarget;
+			
 			if (alphaTimer != null)
 			{
 				clearInterval(alphaTimer);
 			}
 			// Set an interval to disable hide the widgets.  This is for less intrusive hud 
 			alphaTimer = setInterval(this,"checkForClearedHud",6000);	
+		}
+		else
+		{
+			displayActive = false;
 		}
 		
 		if ((abActivate && activationMode == 0) ||
@@ -218,15 +327,265 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 			activateWidgets = true;
 		}
 
-		// Process the bottom player widget
-		ProcessPlayerWidget(validTarget && activateWidgets);
-		ProcessTargetWidget(validTarget && activateWidgets);
-		ProcessInventoryCountWidget(validTarget && activateWidgets);
+		// Only use visibulity delay when not toggling
+		if (activateWidgets && activationMode != 2 && widgetDisplayDelayMS>0 && !displayActive)
+		{	
+			// Set an interval to disable hide the widgets.  This is for less intrusive hud 
+			widgetDelayTimer = setInterval(this,"delayedDisplay",widgetDisplayDelayMS);					
+		}
+		else
+		{
+			// Process the bottom player widget
+			ProcessPlayerWidget(validTarget && activateWidgets, (outData && outData.outObj && outData.outObj.canCarry));	
+			// Process the side widget and inventory
+			ProcessTargetAndInventoryWidget(validTarget && activateWidgets);
+		}
 		
 		// Always show regardless of activation mode
+		ProcessValueToWeight(validTarget);
+		ProcessKnownEnchantment(validTarget);
 		ProcessBookSkill(validTarget);
 		ProcessWeightClass(validTarget);
 		ProcessReadBook(validTarget);
+	}
+	
+	function delayedDisplay():Void
+	{
+		clearInterval(widgetDelayTimer);
+		if (savedCrossHairData)
+		{
+			// Process the bottom player widget
+			ProcessPlayerWidget(savedCrossHairData.validTarget, (savedCrossHairData.outObj && savedCrossHairData.outObj.canCarry));	
+			// Process the side widget and inventory
+			ProcessTargetAndInventoryWidget(savedCrossHairData.validTarget);
+			
+			displayActive = savedCrossHairData.validTarget;
+		}	
+	}
+	
+	function UpdateEnemyLevelValues()
+	{
+		var outData:Object = {outObj:Object};
+		_global.skse.plugins.AHZmoreHUDPlugin.GetEnemyInformation(outData, LevelTranslated.htmlText);			
+		if (outData && outData.outObj)
+		{				
+			savedEnemyLevelNumber = outData.outObj.EnemyLevel;
+			savedPlayerLevelNumber = outData.outObj.PlayerLevel;	
+			
+			//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("Update: " + savedEnemyLevelNumber.toString() + ", " + savedPlayerLevelNumber.toString());
+		}	
+	}
+
+	function interpolate(pBegin:Number, pEnd:Number, pMax:Number, pStep:Number):Number {
+		return pBegin + Math.floor((pEnd - pBegin) * pStep / pMax);
+	}
+
+	function isEnemyLevelUpdateRequired():Boolean
+	{
+		//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("Checking if visible");
+		
+		// Check the enemy movie is even visible
+		if (_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance._alpha == 0 || !showEnemyLevel){
+			return false;
+		}
+		
+
+		var enemyNameText = _root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.text;
+		//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("Checking if (x) is in '" + enemyNameText + "'");
+		var startIndex:Number = enemyNameText.lastIndexOf("(");
+		var lastIndex:Number = enemyNameText.lastIndexOf(")");	
+	
+		//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("SI: " + startIndex.toString());
+		//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("EI: " + lastIndex.toString());
+	
+		// Look for (x) in the text  (This would be a lot easier if AS2 supported RegExp -_-)
+		if (startIndex < 0 || lastIndex < 0 || (lastIndex < startIndex) || ((lastIndex - startIndex) < 2))	
+		{
+			return true;
+		}
+	
+		// Check for A number in the parentheses
+		var levelString:String = enemyNameText.substring(startIndex + 1, lastIndex);
+		
+		//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("D: " + (lastIndex - startIndex).toString());
+		//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("Level String: '" + levelString + "'");
+		
+		if (levelString == "" || parseInt(levelString) == NaN){
+			return true;
+		}
+	
+		return false;
+	
+	}
+
+	function measureStringWidth(str:String):Number {
+		txtMeasureInstance._alpha = 0;
+    	txtMeasureInstance.text = str;
+    	return txtMeasureInstance.textWidth;
+	}
+
+	function SetCompassAngle(aPlayerAngle: Number, aCompassAngle: Number, abShowCompass: Boolean)
+	{			
+		var outData:Object = {outObj:Object};
+	
+		if (showEnemySoulLevel && _root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance._alpha)
+		{
+			_global.skse.plugins.AHZmoreHUDPlugin.GetEnemyInformation(outData, LevelTranslated.htmlText);
+			if (outData && outData.outObj && outData.outObj.Soul){
+				EnemySoul._alpha = _root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance._alpha;
+				EnemySoul.text = outData.outObj.Soul;
+			}
+			else
+			{
+				EnemySoul._alpha = 0;
+			}
+		}
+		else
+		{
+			EnemySoul._alpha = 0;
+			// stting to null will flag the code further down to read the data again for the level
+			outData = null;
+		}
+	
+		// This function is hooked and gets fired every frame
+		if (isEnemyLevelUpdateRequired(outData))
+		{			
+			//_global.skse.plugins.AHZmoreHUDPlugin.AHZLog("T");
+			var levelText:String;
+			// If the data was not aquired from reading the soul level then read it here
+			if (!outData)
+			{
+				outData = {outObj:Object};
+				_global.skse.plugins.AHZmoreHUDPlugin.GetEnemyInformation(outData, LevelTranslated.htmlText);			
+			}
+			
+			if (outData && outData.outObj)
+			{				
+				savedEnemyLevelNumber = outData.outObj.EnemyLevel;
+				savedPlayerLevelNumber = outData.outObj.PlayerLevel;
+				
+				if (savedPlayerLevelNumber == 0 && savedEnemyLevelNumber == 0)
+				{
+					return;
+				}
+			}
+			else
+			{
+				return;
+			}
+											
+			if (showEnemyLevelMax > 0 && showEnemyLevelMin > 0 )
+			{	
+				var oldTextWidth:Number = measureStringWidth(_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.text);
+
+				// Get the delta of level from player
+				var deltaLevelFromPlayer = savedEnemyLevelNumber-savedPlayerLevelNumber;
+				var maxPercent:Number = showEnemyLevelMax;
+				var minPercent:Number = showEnemyLevelMin * -1.0;
+							
+				var R:Number;
+				var G:Number;
+				var B:Number;
+				var RGB:Number;
+				var fontColor:String;
+				if (deltaLevelFromPlayer < 0){
+					if (deltaLevelFromPlayer < minPercent)
+					{
+						deltaLevelFromPlayer = minPercent;
+					}
+					
+					// Start with the same green that is used throughout the menus
+					R = interpolate(0xFF,0x18,minPercent, deltaLevelFromPlayer);
+					G = interpolate(0xFF,0x95,minPercent, deltaLevelFromPlayer);
+					B = interpolate(0xFF,0x15,minPercent, deltaLevelFromPlayer);
+					RGB = (R * 65536) + (G * 256) + B;
+					fontColor = RGB.toString(16);
+				}
+				else if (deltaLevelFromPlayer > 0){
+					if (deltaLevelFromPlayer > maxPercent)
+					{
+						deltaLevelFromPlayer = maxPercent;
+					}
+					R = interpolate(0xFF,0xFF,maxPercent, deltaLevelFromPlayer);
+					G = interpolate(0xFF,0x00,maxPercent, deltaLevelFromPlayer);
+					B = interpolate(0xFF,0x00,maxPercent, deltaLevelFromPlayer);
+					RGB = (R * 65536) + (G * 256) + B;
+					fontColor = RGB.toString(16);						
+				}
+				else
+				{
+					fontColor = "FFFFFF";
+				}
+			
+				_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.html = true;	
+				levelText = " (<font color=\'#" + fontColor + "\'>" + savedEnemyLevelNumber.toString() + "</font>)";
+				
+				// Append the level
+				_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.htmlText = 
+					appendHtmlToEnd(_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.htmlText, levelText);
+			}
+			// No coloring, turn off html
+			else
+			{
+				_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.html = false;
+				levelText = _root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.text;									
+				levelText = levelText + " (" + savedEnemyLevelNumber.toString() + ")";
+				_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.html = false;
+				_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.text = levelText;
+			}
+			
+			// Calculate the new position for the brackets
+			var newTextWidth:Number = measureStringWidth(_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.RolloverNameInstance.text);
+			
+			var widthPercentChange = (newTextWidth - oldTextWidth) / oldTextWidth;
+			var adjustedBracketWidth = _root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance._currentframe + 
+					(_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance._currentframe * widthPercentChange)
+			
+			adjustedBracketWidth = Math.min(100, Math.max(adjustedBracketWidth, 0));
+			var iMeterFrame: Number = Math.floor(adjustedBracketWidth);
+			
+			_root.HUDMovieBaseInstance.EnemyHealth_mc.BracketsInstance.gotoAndStop(iMeterFrame);						
+		}
+	}
+	
+	function ProcessValueToWeight(isValidTarget:Boolean):Void
+	{		
+		if (showValueToWeight && isValidTarget)
+		{
+			// Show weight class if its armor
+			if (BottomRolloverText._alpha > 0 && BottomRolloverText.htmlText != "")
+			{
+				var valueToWeight:String = _global.skse.plugins.AHZmoreHUDPlugin.GetValueToWeightString(BottomRolloverText.text, WVTranslated.text);
+				if (valueToWeight != "")
+				{					
+					BottomRolloverText.htmlText = 
+						appendHtmlToEnd(BottomRolloverText.htmlText, valueToWeight); 
+				}
+			}
+		}
+	}
+
+	function ProcessKnownEnchantment(isValidTarget:Boolean):Void
+	{
+		if (showknownEnchantment && isValidTarget)
+		{
+			var knownEnchantment:Number=_global.skse.plugins.AHZmoreHUDPlugin.IsAKnownEnchantedItem();
+
+			if (knownEnchantment && TopRolloverText._alpha > 0 && TopRolloverText.htmlText!="")
+			{
+				TopRolloverText.html=true;
+				
+				// Player knows the enchantment
+				if (knownEnchantment == 1){
+					appendImageToEnd(TopRolloverText, "ahzknown.png", 17, 17);
+				}
+				
+				// The item is enchanted, but the player cannot learn the enchantment
+				if (knownEnchantment == 2){
+					appendImageToEnd(TopRolloverText, "ahzEnch.png", 17, 17);
+				}	
+			}
+		}
 	}
 
 	function ProcessWeightClass(isValidTarget:Boolean):Void
@@ -234,19 +593,14 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		if (showWeightClass && isValidTarget)
 		{
 			// Show weight class if its armor
-			if (_root.HUDMovieBaseInstance.RolloverInfoText._alpha > 0 && _root.HUDMovieBaseInstance.RolloverInfoText.htmlText != "")
+			if (BottomRolloverText._alpha > 0 && BottomRolloverText.htmlText != "")
 			{
 				var weightClass:String = _global.skse.plugins.AHZmoreHUDPlugin.GetArmorWeightClassString();
 				if (weightClass != "")
 				{
 					// Insert the weight class into the rolloverinfo textfield
-					var stringIndex:Number;
-					var rolloverText:String = _root.HUDMovieBaseInstance.RolloverInfoText.htmlText;
-					stringIndex = rolloverText.lastIndexOf("</P></TEXTFORMAT>");
-					var firstText:String = rolloverText.substr(0,stringIndex);
-					var secondText:String = rolloverText.substr(stringIndex,rolloverText.length - stringIndex);
-					var formattedText = weightClass.toUpperCase();
-					_root.HUDMovieBaseInstance.RolloverInfoText.htmlText = firstText + formattedText + secondText;
+					BottomRolloverText.htmlText = 
+						appendHtmlToEnd(BottomRolloverText.htmlText, weightClass.toUpperCase());
 				}
 			}
 		}
@@ -257,20 +611,14 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		if (showBookSkill && isValidTarget)
 		{			
 			// Show book skill
-			if (_root.HUDMovieBaseInstance.RolloverInfoText._alpha > 0 && _root.HUDMovieBaseInstance.RolloverInfoText.htmlText != "")
+			if (BottomRolloverText._alpha > 0 && BottomRolloverText.htmlText != "")
 			{
 				var bookSkill:String = _global.skse.plugins.AHZmoreHUDPlugin.GetBookSkillString();
 				if (bookSkill != "")
 				{
-					// Insert the weight class into the rolloverinfo textfield
-					var stringIndex:Number;
-					var rolloverText:String = _root.HUDMovieBaseInstance.RolloverInfoText.htmlText;
-					savedRolloverInfoText = rolloverText;
-					stringIndex = rolloverText.lastIndexOf("</P></TEXTFORMAT>");
-					var firstText:String = rolloverText.substr(0,stringIndex);
-					var secondText:String = rolloverText.substr(stringIndex,rolloverText.length - stringIndex);
-					var formattedText = bookSkill.toUpperCase();
-					_root.HUDMovieBaseInstance.RolloverInfoText.htmlText = firstText + formattedText + secondText;
+					// Insert the book skill into the rolloverinfo textfield
+					BottomRolloverText.htmlText = 
+						appendHtmlToEnd(BottomRolloverText.htmlText, bookSkill.toUpperCase());					
 				}
 				else
 				{
@@ -288,77 +636,69 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		}
 	}
 
-	function ProcessTargetWidget(isValidTarget:Boolean):Void
+	function ProcessTargetAndInventoryWidget(isValidTarget:Boolean):Void
 	{
 		var sideWidgetDataExists:Boolean = false;
 
 		if (isValidTarget)
 		{
+			var targetData:Object = {effectsObj:Object, ingredientObj:Object, inventoryObj:Object};
+			
+			if (viewEffectsInfo || viewSideInfo || viewInventoryCount)
+			{
+				// Get the target effects
+				_global.skse.plugins.AHZmoreHUDPlugin.GetTargetEffects(targetData, viewInventoryCount);	
+			}
+						
 			if (viewEffectsInfo)
 			{
-				var effectData:Object = {effectsObj:Object};
-				// Get the target effects
-				_global.skse.plugins.AHZmoreHUDPlugin.GetTargetEffects(effectData);
-
 				// If effects exist
-				if (effectData.effectsObj != undefined && effectData.effectsObj != null)
+				if (targetData.effectsObj != undefined && targetData.effectsObj != null)
 				{
 					sideWidgetDataExists = true;
-					showSideWidget(effectData.effectsObj);
+					showSideWidget(targetData.effectsObj);
 				}
 			}
 			
 			if (viewSideInfo && !sideWidgetDataExists)
 			{
-				var ingredientData:Object = {ingredientObj:Object};
-				_global.skse.plugins.AHZmoreHUDPlugin.GetIngredientData(ingredientData);
-
 				// If the target is an ingredient
-				if (ingredientData.ingredientObj != undefined && ingredientData.ingredientObj != null)
+				if (targetData.ingredientObj != undefined && targetData.ingredientObj != null)
 				{
 					sideWidgetDataExists = true;
-					showSideWidget(ingredientData.ingredientObj);
+					showSideWidget(targetData.ingredientObj);
 				}
 			}
+			
+			if (viewInventoryCount && targetData.inventoryObj)
+			{
+				showInventoryWidget(targetData.inventoryObj.inventoryName,targetData.inventoryObj.inventoryCount);
+			}
+			else
+			{
+				hideInventoryWidget();
+			}			
 		}
-
+		else
+		{
+			hideInventoryWidget();
+		}
+		
 		// If There is no side widget data, then make sure the widget is hidden
 		if (! sideWidgetDataExists)
 		{
 			hideSideWidget();
 		}
 	}
-
-	function ProcessInventoryCountWidget(isValidTarget:Boolean):Void
-	{
-		if (viewInventoryCount && isValidTarget)
-		{
-			var inventoryData:Object = {dataObj:Object};
-			_global.skse.plugins.AHZmoreHUDPlugin.GetTargetInventoryCount(inventoryData);
-
-			if (inventoryData.dataObj == undefined || inventoryData.dataObj == null)
-			{
-				hideInventoryWidget();
-			}
-			else
-			{
-				showInventoryWidget(inventoryData.dataObj.inventoryName,inventoryData.dataObj.inventoryCount);
-			}
-		}
-		else
-		{
-			hideInventoryWidget();
-		}
-	}
-
-	function ProcessPlayerWidget(isValidTarget:Boolean):Void
+	
+	function ProcessPlayerWidget(isValidTarget:Boolean, canCarry:Boolean):Void
 	{
 		if (viewBottomInfo)
 		{
 			var targetData:Object = {targetObj:Object};
 			var playerData:Object = {playerObj:Object};
 
-			if (isValidTarget)
+			if (isValidTarget && canCarry)
 			{
 				// Get player data against the current target
 				_global.skse.plugins.AHZmoreHUDPlugin.GetTargetObjectData(targetData);
@@ -367,20 +707,34 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 				if (targetData.targetObj != undefined && targetData.targetObj != null && playerData.playerObj != undefined && playerData.playerObj != null)
 				{
 					// SHow the bottom widget data.  TODO: pass the object directly
-					showBottomWidget(targetData.targetObj.ratingOrDamage,targetData.targetObj.difference,playerData.playerObj.encumbranceNumber,playerData.playerObj.maxEncumbranceNumber,playerData.playerObj.goldNumber,targetData.targetObj.objWeight,targetData.targetObj.formType);
+					showBottomWidget(
+									 targetData.targetObj.ratingOrDamage,
+									 targetData.targetObj.difference,
+									 playerData.playerObj.encumbranceNumber,
+									 playerData.playerObj.maxEncumbranceNumber,
+									 playerData.playerObj.goldNumber,
+									 targetData.targetObj.objWeight,
+									 targetData.targetObj.formType);
 				}
 				else
 				{
 					hideBottomWidget();
 				}
 			}
-			else if (ToggleState > 0)
+			else if (ToggleState > 0 || viewBottomInfoAlways)
 			{
 				// Only show player data
 				_global.skse.plugins.AHZmoreHUDPlugin.GetPlayerData(playerData);
 				if (playerData.playerObj != undefined && playerData.playerObj != null)
 				{
-					showBottomWidget(0,0,playerData.playerObj.encumbranceNumber,playerData.playerObj.maxEncumbranceNumber,playerData.playerObj.goldNumber,0.0,AHZInventoryDefines.kNone);
+					showBottomWidget(
+									 0,
+									 0,
+									 playerData.playerObj.encumbranceNumber,
+									 playerData.playerObj.maxEncumbranceNumber,
+									 playerData.playerObj.goldNumber,
+									 0.0,
+									 AHZInventoryDefines.kNone);
 				}
 				else
 				{
@@ -403,42 +757,6 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	{
 		super.onLoad();
 	}
-
-	// @override MovieClipLoader
-	public function onLoadInit(a_icon:MovieClip):Void
-	{
-	}
-
-	// @override MovieClipLoader
-	public function onLoadError(a_icon:MovieClip,a_errorCode:String):Void
-	{
-		// TODO
-		//skse.SendModEvent("SKIWF_widgetError", "IconLoadFailure", Number(_widgetID)); //"WidgetID: " + _widgetID + " IconLoadError: " + a_errorCode + " (" + _iconSource + ")");
-
-	}
-
-	/* PAPYRUS INTERFACE */
-	// @Papyrus
-	public function showEquippedWidget(showPowerOnly:Number):Void
-	{		
-		setEquippedWidgetPosition(0,50.0);
-		Weapons_mc._alpha = 100;
-	}		
-	
-	public function setEquippedWidgetPosition(xPercent:Number,yPercent:Number):Void
-	{
-		var tempVar:Number;
-		var inverse:Number;
-
-		inverse = 1.0/(xPercent/100.0);
-
-		tempVar = (Stage.visibleRect.width/inverse)-(300.0/inverse);
-		Weapons_mc._x = tempVar;
-
-		inverse = 1.0/(yPercent/100.0);
-		tempVar = (Stage.visibleRect.height/inverse)-(Weapons_mc._height/inverse);
-		Weapons_mc._y = tempVar;
-	}	
 	
 	// @Papyrus
 	public function setBottomWidgetPosition(xPercent:Number,yPercent:Number):Void
@@ -448,12 +766,19 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 
 		inverse = 1.0/(xPercent/100.0);
 
-		tempVar = (Stage.visibleRect.width/inverse)-(451.0/inverse);
+		tempVar = (Stage.visibleRect.width/inverse)-(PLAYER_CARD_WIDTH/inverse);
 		AHZBottomBar_mc._x = tempVar;
 
 		inverse = 1.0/(yPercent/100.0);
 		tempVar = (Stage.visibleRect.height/inverse)-(AHZBottomBar_mc._height/inverse);
 		AHZBottomBar_mc._y = tempVar;
+	}
+
+	// @Papyrus
+	public function setBottomWidgetScale(percent:Number):Void
+	{
+		AHZBottomBar_mc._yscale  = (percent / 1.0);
+		AHZBottomBar_mc._xscale  = (percent / 1.0);
 	}
 
 	// @Papyrus
@@ -473,6 +798,13 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	}
 	
 	// @Papyrus
+	public function setInventoryWidgetScale(percent:Number):Void
+	{
+		Inventory_mc._yscale  = (percent / 1.0);
+		Inventory_mc._xscale  = (percent / 1.0);
+	}	
+	
+	// @Papyrus
 	public function setSideWidgetPosition(xPercent:Number,yPercent:Number):Void
 	{
 		var tempVar:Number;
@@ -489,6 +821,13 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	}
 
 	// @Papyrus
+	public function setSideWidgetScale(percent:Number):Void
+	{
+		content._yscale  = (percent / 1.0);
+		content._xscale  = (percent / 1.0);
+	}	
+
+	// @Papyrus
 	public function updateSettings(sideView:Number, 
 								   effectsView:Number, 
 								   bottomView:Number, 
@@ -502,8 +841,16 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 								   activationModeValue:Number,
 								   ToggleStateValue:Number,
 								   showBookSkillValue:Number,
-								   showTargetWeightValue:Number):Void {
-		
+								   showTargetWeightValue:Number,
+								   showValueToWeightValue:Number,
+								   showEnemyLevelValue:Number,
+								   showEnemyLevelMaxValue:Number,
+								   showEnemyLevelMinValue:Number,
+								   showknownEnchantmentValue:Number,
+								   widgetDisplayDelayMSValue:Number,
+								   showEnemySoulLevelValue:Number,
+								   viewBottomInfoAlwaysValue:Number):Void 
+	{				
 		viewSideInfo = (sideView>=1);
 		viewBottomInfo = (bottomView>=1);
 		viewInventoryCount = (inventoryCount>=1);
@@ -518,17 +865,30 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		activationMode = activationModeValue;
 		showBookSkill = (showBookSkillValue>=1);
 		showTargetWeight = (showTargetWeightValue>=1);
-		
+		showValueToWeight = (showValueToWeightValue>=1);
+		showEnemyLevel = (showEnemyLevelValue>=1);
+		showEnemyLevelMax = showEnemyLevelMaxValue;
+		showEnemyLevelMin = showEnemyLevelMinValue;
+		showknownEnchantment = (showknownEnchantmentValue>=1);
+		widgetDisplayDelayMS = widgetDisplayDelayMSValue;
+		showEnemySoulLevel = (showEnemySoulLevelValue>=1);
+		viewBottomInfoAlways = (viewBottomInfoAlwaysValue>=1);
 		RefreshWidgets();
 	}
 
 	// @Papyrus
-	public function showBottomWidget(ratingOrDamage:Number,difference:Number,encumbranceNumber:Number,maxEncumbranceNumber:Number,goldNumber:Number,weightValue:Number,formType:Number):Void
-	{
+	public function showBottomWidget(
+						ratingOrDamage:Number,
+						difference:Number,
+						encumbranceNumber:Number,
+						maxEncumbranceNumber:Number,
+						goldNumber:Number,weightValue:Number,
+						formType:Number):Void
+	{		
 		if (viewBottomInfo)
 		{
 			var tempType:Number;
-			if (formType == AHZInventoryDefines.kWeapon || formType == AHZInventoryDefines.kAmmo)
+			if (formType == AHZInventoryDefines.kWeapon || formType == AHZInventoryDefines.kAmmo || formType == AHZInventoryDefines.kProjectile)
 			{
 				tempType = AHZInventoryDefines.ICT_WEAPON;
 			}
@@ -547,7 +907,21 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 				weightValue = 0;
 			}
 			
-			AHZBottomBar_mc.UpdatePlayerInfo({damage:ratingOrDamage,armor:ratingOrDamage,gold:goldNumber,encumbrance:encumbranceNumber,maxEncumbrance:maxEncumbranceNumber},{type:tempType,damageChange:difference,armorChange:difference,objWeight:weightValue},bottomAligned);
+			AHZBottomBar_mc.UpdatePlayerInfo(
+					{
+						damage:ratingOrDamage,
+					 	armor:ratingOrDamage,
+					 	gold:goldNumber,
+					 	encumbrance:encumbranceNumber,
+					 	maxEncumbrance:maxEncumbranceNumber
+					},
+					{
+						type:tempType,
+					   	damageChange:difference,
+					   	armorChange:difference,
+					   	objWeight:weightValue
+					},
+					bottomAligned);
 
 
 			AHZBottomBar_mc._alpha = 100;
@@ -561,7 +935,13 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 	// @Papyrus
 	public function hideBottomWidget():Void
 	{
-		AHZBottomBar_mc._alpha = 0;
+		if (!viewBottomInfoAlways){
+			AHZBottomBar_mc._alpha = 0;
+		}
+		else
+		{
+			
+		}
 	}
 
 	// @Papyrus
@@ -650,16 +1030,15 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 					content.gotoAndStop("DEFAULT");
 					break;
 			}
+				
+			//content.ApparelEnchantedLabel.border = true;
+			content.ApparelEnchantedLabel.verticalAutoSize="center"	
+			content.ApparelEnchantedLabel.textAutoSize="shrink";		
+
 			content.ApparelEnchantedLabel.html=true;
-			content.ApparelEnchantedLabel.textAutoSize="shrink";
 			content.ApparelEnchantedLabel.htmlText=a_val.effectsDescription;
 
-
-			var num:Number = (content.ApparelEnchantedLabel.getLineMetrics(0).height*1.0);
-			num = num*(content.ApparelEnchantedLabel.numLines);
-			num = (content.ApparelEnchantedLabel._height*0.5)-(num*0.5);
-			content.ApparelEnchantedLabel._y = (num-(3.0));
-		} else if (viewSideInfo && a_val.effect1 != undefined && a_val.effect2 != undefined && a_val.effect3 != undefined && a_val.effect4 != undefined && a_val.effect1 != null && a_val.effect2 != null && a_val.effect3 != null && a_val.effect4 != null) {
+		} else if (viewSideInfo && a_val.effect1 != undefined) {
 			switch (ingredientWidgetStyle) {
 				case 0 :
 					content.gotoAndStop("ST1_INGREDIENTS");
@@ -678,61 +1057,27 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 					break;
 			}
 
-			content.Ingredient1.html=true;
-			content.Ingredient2.html=true;
-			content.Ingredient3.html=true;
-			content.Ingredient4.html=true;
+			for (var i = 1; i <=4; i++) 
+			{
+				content["Ingredient" + i].html=true;
 
-			if (a_val.effect1=="")
-			{
-				content.Ingredient1.htmlText="$UNKNOWN";
-				content.IngredientBullet1._alpha=25;
-				content.Ingredient1._alpha=25;
-			}
-			else
-			{
-				content.Ingredient1._alpha=100;
-				content.IngredientBullet1._alpha=100;
-				content.Ingredient1.htmlText=a_val.effect1;//.toUpperCase();
-			}
-
-			if (a_val.effect2=="")
-			{
-				content.Ingredient2.htmlText="$UNKNOWN";
-				content.IngredientBullet2._alpha=25;
-				content.Ingredient2._alpha=25;
-			}
-			else
-			{
-				content.Ingredient2._alpha=100;
-				content.IngredientBullet2._alpha=100;
-				content.Ingredient2.htmlText=a_val.effect2;//.toUpperCase();
-			}
-
-			if (a_val.effect3=="")
-			{
-				content.Ingredient3.htmlText="$UNKNOWN";
-				content.IngredientBullet3._alpha=25;
-				content.Ingredient3._alpha=25;
-			}
-			else
-			{
-				content.Ingredient3._alpha=100;
-				content.IngredientBullet3._alpha=100;
-				content.Ingredient3.htmlText=a_val.effect3;//.toUpperCase();
-			}
-
-			if (a_val.effect4=="")
-			{
-				content.Ingredient4.htmlText="$UNKNOWN";
-				content.IngredientBullet4._alpha=25;
-				content.Ingredient4._alpha=25;
-			}
-			else
-			{
-				content.Ingredient4._alpha=100;
-				content.IngredientBullet4._alpha=100;
-				content.Ingredient4.htmlText=a_val.effect4;//.toUpperCase();
+				if (a_val["effect" + i] == undefined)
+				{
+					content["Ingredient" + i].htmlText="";
+					content["IngredientBullet" + i]._alpha=0;
+				}
+				else if (a_val["effect" + i]=="")
+				{
+					content["Ingredient" + i].htmlText="$UNKNOWN";
+					content["IngredientBullet" + i]._alpha=25;
+					content["Ingredient" + i]._alpha=25;
+				}
+				else
+				{
+					content["Ingredient" + i]._alpha=100;
+					content["IngredientBullet" + i]._alpha=100;
+					content["Ingredient" + i].htmlText=a_val["effect"+i];
+				}
 			}
 		}
 		else
@@ -747,58 +1092,14 @@ class ahz.scripts.widgets.AHZHudInfoWidget extends MovieClip
 		{
 			var bookRead:Boolean=_global.skse.plugins.AHZmoreHUDPlugin.GetIsBookAndWasRead();
 
-			if (bookRead&&_root.HUDMovieBaseInstance.RolloverInfoText._alpha>0&&_root.HUDMovieBaseInstance.RolloverInfoText.htmlText!="")
+			if (bookRead && TopRolloverText._alpha>0 && TopRolloverText.htmlText!="")
 			{
-				// Restore the RolloverInfoText if this was a skill book that was read
-				if (savedRolloverInfoText != "")
-				{
-					_root.HUDMovieBaseInstance.RolloverInfoText.htmlText = savedRolloverInfoText;
-				}				
-				// Remove the right margin if it already exists
-				var formatText:String=_root.HUDMovieBaseInstance.RolloverInfoText.htmlText;
-				var tempArray:Array=formatText.split("RIGHTMARGIN=\"60\"");
-				formatText=tempArray.join("RIGHTMARGIN=\"0\"");
-				_root.HUDMovieBaseInstance.RolloverInfoText.htmlText=formatText;
-
-				// Get the coordinates for the rollover textfield
-				var theX:Number = 	
-				_root.HUDMovieBaseInstance._x + 
-				_root.HUDMovieBaseInstance.RolloverInfoText._x + 
-				_root.HUDMovieBaseInstance.RolloverInfoText.getLineMetrics(0).x +
-				_root.HUDMovieBaseInstance.RolloverInfoText.getLineMetrics(0).width;
-				var theY:Number = _root.HUDMovieBaseInstance._y + _root.HUDMovieBaseInstance.RolloverInfoText._y;
-				theY = theY + 7.0;
-				
-
-				// Convert to this coordinates
-				var myPoint:Object={x:theX,y:theY};
-				this.globalToLocal(myPoint);
-				Book_mc._x=myPoint.x;
-				Book_mc._y=myPoint.y;
-				Book_mc._alpha=75;
-
-				// Add a right margin to the rollover textfield to give room for the read image
-				var formatText:String=_root.HUDMovieBaseInstance.RolloverInfoText.htmlText;
-				var tempArray:Array=formatText.split("RIGHTMARGIN=\"0\"");
-				formatText=tempArray.join("RIGHTMARGIN=\"60\"");
-				_root.HUDMovieBaseInstance.RolloverInfoText.htmlText=formatText;
+				TopRolloverText.html=true;
+				appendImageToEnd(TopRolloverText, "eyeImage.png", 17, 17);				
 			}
-			else
-			{
-				Book_mc._alpha=0;
-			}
-		}
-		else
-		{
-			Book_mc._alpha=0;
 		}
 	}
 
-	public function log(txt:String):Void
-	{
-	}
-
-//hookFunction(_root.HUDMovieBaseInstance,"SetCrosshairTarget",this,"SetCrosshairTarget");
 	public static function hookFunction(a_scope:Object, a_memberFn:String, a_hookScope:Object, a_hookFn:String):Boolean {
 		var memberFn:Function = a_scope[a_memberFn];
 		if (memberFn == null || a_scope[a_memberFn] == null) {
